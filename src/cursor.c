@@ -203,7 +203,7 @@ PyObject *PGCursor_fetchone(PGCursor *self, PyObject *args) {
         PyTuple_SET_ITEM(row, j, value);
     }
 
-    PQclear(result);
+    self->result = NULL;
     return row;
 }
 
