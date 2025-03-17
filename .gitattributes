@@ -1,0 +1,2 @@
+setup.py linguist-detectable=false
+build.sh linguist-detectable=false
