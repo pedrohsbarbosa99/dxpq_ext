@@ -78,28 +78,29 @@ PyObject *PGCursor_execute_params(PGCursor *self, PyObject *args, PyObject *kwds
             return NULL;
         }
 
-        if (PyUnicode_Check(item)) {
-            paramValues[i] = PyUnicode_AsUTF8(item);
-            paramLengths[i] = strlen(paramValues[i]);
-            paramFormats[i] = 0;
-        }
-        else {
-            PyObject *str_item = PyObject_Str(item);
-            if (str_item) {
-                if (str_item != NULL) {
-                    const char* str = PyUnicode_AsUTF8(str_item);
-                    paramValues[i] = strdup(str);
-                    Py_DECREF(str);
-                    
+        PyObject *str_item = PyObject_Str(item);
+        
+        if (str_item) {
+            if (str_item != NULL) {
+                const char* str;
+                if (PyBool_Check(item)) {
+                    str = PyObject_IsTrue(item) == 1 ? "TRUE" : "FALSE";
+                } else {
+                    str = PyUnicode_AsUTF8(str_item);
                 }
-                Py_DECREF(str_item);
-            } else {
-                PyErr_SetString(PyExc_TypeError, "Falha ao converter o item para string");
-                free(paramValues);
-                free(paramLengths);
-                free(paramFormats);
-                return NULL;
+
+                paramLengths[i] = sizeof(item);
+                paramFormats[i] = 0;
+                paramValues[i] = strdup(str);
+                
             }
+            Py_DECREF(str_item);
+        } else {
+            PyErr_SetString(PyExc_TypeError, "Falha ao converter o item para string");
+            free(paramValues);
+            free(paramLengths);
+            free(paramFormats);
+            return NULL;
         }
 
     }
@@ -115,10 +116,14 @@ PyObject *PGCursor_execute_params(PGCursor *self, PyObject *args, PyObject *kwds
         0
     );
 
-    free(paramValues);
     free(paramLengths);
     free(paramFormats);
 
+    for (int i = 0; i < nParams; i++) {
+        free((char *)paramValues[i]);
+    }
+    
+    free(paramValues);
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK && PQresultStatus(result) != PGRES_TUPLES_OK) {
         PyErr_SetString(PyExc_RuntimeError, PQresultErrorMessage(result));
