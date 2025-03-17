@@ -71,7 +71,7 @@ PyObject *PGCursor_execute_params(PGCursor *self, PyObject *args, PyObject *kwds
         PyObject *item = PyTuple_GetItem(params, i);
         
         if (!item) {
-            PyErr_SetString(PyExc_IndexError, "Erro ao acessar o item da tupla");
+            PyErr_SetString(PyExc_IndexError, "Error To access tuple item");
             free(paramValues);
             free(paramLengths);
             free(paramFormats);
@@ -96,7 +96,7 @@ PyObject *PGCursor_execute_params(PGCursor *self, PyObject *args, PyObject *kwds
             }
             Py_DECREF(str_item);
         } else {
-            PyErr_SetString(PyExc_TypeError, "Falha ao converter o item para string");
+            PyErr_SetString(PyExc_TypeError, "Unable to convert param to string");
             free(paramValues);
             free(paramLengths);
             free(paramFormats);
