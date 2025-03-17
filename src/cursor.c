@@ -34,6 +34,104 @@ int PGCursor_init(PGCursor *self, PyObject *args, PyObject *kwds) {
 }
 
 
+PyObject *PGCursor_execute_params(PGCursor *self, PyObject *args, PyObject *kwds) {
+    const char *sql;
+    PyObject *params = NULL;
+    char *listkws[] = {"sql", "params", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "sO", listkws, &sql, &params)) {
+        if (!sql) {
+            PyErr_SetString(PyExc_RuntimeError, "argument 'sql' is required");
+            return NULL;
+        }
+        if (!params) {
+            PyErr_SetString(PyExc_RuntimeError, "argument 'params' is required");
+            return NULL;
+        }
+        return NULL;
+    }
+
+    int nParams = (int)PyTuple_Size(params);
+    const Oid *paramTypes = NULL;
+
+
+    const char **paramValues = malloc(nParams * sizeof(char *));
+
+    int *paramLengths = malloc(nParams * sizeof(int));
+    int *paramFormats = malloc(nParams * sizeof(int));
+
+    if (!paramValues || !paramLengths || !paramFormats) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to allocate memory");
+        free(paramValues);
+        free(paramLengths);
+        free(paramFormats);
+        return NULL;
+    }
+
+    for (int i = 0; i < nParams; i++) {
+        PyObject *item = PyTuple_GetItem(params, i);
+        
+        if (!item) {
+            PyErr_SetString(PyExc_IndexError, "Erro ao acessar o item da tupla");
+            free(paramValues);
+            free(paramLengths);
+            free(paramFormats);
+            return NULL;
+        }
+
+        if (PyUnicode_Check(item)) {
+            paramValues[i] = PyUnicode_AsUTF8(item);
+            paramLengths[i] = strlen(paramValues[i]);
+            paramFormats[i] = 0;
+        }
+        else {
+            PyObject *str_item = PyObject_Str(item);
+            if (str_item) {
+                if (str_item != NULL) {
+                    const char* str = PyUnicode_AsUTF8(str_item);
+                    paramValues[i] = strdup(str);
+                    Py_DECREF(str);
+                    
+                }
+                Py_DECREF(str_item);
+            } else {
+                PyErr_SetString(PyExc_TypeError, "Falha ao converter o item para string");
+                free(paramValues);
+                free(paramLengths);
+                free(paramFormats);
+                return NULL;
+            }
+        }
+
+    }
+
+    PGresult *result = PQexecParams(
+        self->PGConnection->conn,
+        sql,
+        nParams,
+        paramTypes,
+        paramValues,
+        paramLengths,
+        paramFormats,
+        0
+    );
+
+    free(paramValues);
+    free(paramLengths);
+    free(paramFormats);
+
+
+    if (PQresultStatus(result) != PGRES_COMMAND_OK && PQresultStatus(result) != PGRES_TUPLES_OK) {
+        PyErr_SetString(PyExc_RuntimeError, PQresultErrorMessage(result));
+        return NULL;
+    }
+    
+    self->result = result;
+
+    Py_RETURN_NONE;
+    
+}
+
+
 PyObject *PGCursor_execute(PGCursor *self, PyObject *args, PyObject *kwds) {
     const char *sql;
     char *listkws[] = {"sql", NULL};
@@ -78,7 +176,7 @@ PyObject *PGCursor_fetchall(PGCursor *self, PyObject *args) {
         PyList_SET_ITEM(list_results, i, row);
     }
 
-    PQclear(result);
+    self->result = NULL;
     return list_results;
 }
 
@@ -120,6 +218,7 @@ PyObject *PGCursor_close(PGCursor *self) {
 
 PyMethodDef PGCursor_methods[] = {
     {"execute", (PyCFunction)PGCursor_execute, METH_VARARGS | METH_KEYWORDS, "Execute a query"},
+    {"execute_params", (PyCFunction)PGCursor_execute_params, METH_VARARGS | METH_KEYWORDS, "Execute a query with params"},
     {"fetchall", (PyCFunction)PGCursor_fetchall, METH_NOARGS, "Fetch all rows from a query"},
     {"fetchone", (PyCFunction)PGCursor_fetchone, METH_NOARGS, "Fetch one row from a query"},
     {"close", (PyCFunction)PGCursor_close, METH_NOARGS, "Close the cursor"},
