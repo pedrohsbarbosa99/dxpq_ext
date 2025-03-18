@@ -17,7 +17,7 @@ cd dxpq_ext
 
 Instale as dependências do PostgreSQL:
 ```bash
-sudo apt-get install libpq-dev python3-dev
+sudo apt-get install -y gcc build-essential libpq-dev python3-dev
 ```
 
 Instale as dependências de Dev:

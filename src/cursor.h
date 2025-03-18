@@ -5,10 +5,12 @@
 #include <libpq-fe.h>
 #include "connection.h"
 
+
 typedef struct {
     PyObject_HEAD
     PGresult *result;
     PGConnection *PGConnection;
+    char* cursor_type;
 } PGCursor;
 
 void PGCursor_dealloc(PGCursor *self);
