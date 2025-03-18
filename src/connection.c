@@ -22,7 +22,7 @@ PyObject *PGConnection_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 }
 
 int PGConnection_init(PGConnection *self, PyObject *args, PyObject *kwds) {
-    const char *conninfo = NULL;
+    const char *conninfo;
     char *listkws[] = {"conninfo", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", listkws, &conninfo)) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to parse arguments");

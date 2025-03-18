@@ -18,19 +18,75 @@ PyObject *PGCursor_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     if (self != NULL) {
         self->result = NULL;
         self->PGConnection = NULL;
+        self->cursor_type = NULL;
     }
     return (PyObject *) self;
 }
 
 int PGCursor_init(PGCursor *self, PyObject *args, PyObject *kwds) {
     const PyObject *connection;
-    char *listkws[] = {"connection", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", listkws, &connection)) {
+    const PyObject *cursor_type;
+    char *listkws[] = {"connection", "cursor_type", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Os", listkws, &connection, &cursor_type)) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to parse arguments");
         return -1;
     }
+    self->cursor_type = (char *)cursor_type;
     self->PGConnection = (PGConnection *)connection;
     return 0;
+}
+
+static PyObject *get_row(char* cursor_type, PGresult *result, int nrows, int ncols, int many) {
+    PyObject *list_results = PyList_New(nrows);
+
+    for (int i = 0; i < nrows; i++) {
+        PyObject *row = PyTuple_New(nrows);
+
+        for (int j = 0; j < ncols; j++) {
+            PyObject *value = PyUnicode_FromString(PQgetvalue(result, i, j));
+            PyTuple_SET_ITEM(row, j, value);
+        }
+        if (many == 0){
+            return row;
+        }
+
+        PyList_SET_ITEM(list_results, i, row);
+    }
+    return list_results;
+}
+
+static PyObject *get_dict(char* cursor_type, PGresult *result, int nrows, int ncols, int many) {
+    PyObject *list_results = PyList_New(nrows);
+
+    for (int i = 0; i < nrows; i++) {
+        PyObject *row = PyDict_New();
+
+        for (int j = 0; j < ncols; j++) {
+            PyObject *name = PyUnicode_FromString(PQfname(result, j));
+            PyObject *value = PyUnicode_FromString(PQgetvalue(result, i, j));
+            PyDict_SetItem(row, name, value);
+        }
+        if (many == 0){
+            return row;
+        }
+
+        PyList_SET_ITEM(list_results, i, row);
+    }
+    return list_results;
+}
+
+static PyObject *format_result(char* cursor_type, PGresult *result, int many) {
+    int nrows = PQntuples(result);
+    int ncols = PQnfields(result);
+
+    if (strcmp(cursor_type, "row") == 0){
+        return get_row(cursor_type, result, nrows, ncols, many);
+    } else if (strcmp(cursor_type, "dict") == 0) {
+        return get_dict(cursor_type, result, nrows, ncols, many);
+    } else {
+        PyErr_SetString(PyExc_AttributeError, "invalid cursor_type");
+        return NULL;
+    }
 }
 
 
@@ -163,26 +219,11 @@ PyObject *PGCursor_fetchall(PGCursor *self, PyObject *args) {
         return NULL;
     }
 
-    PGresult *result = self->result;
-
-    int nrows = PQntuples(result);
-    int ncols = PQnfields(result);
-
-    PyObject *list_results = PyList_New(nrows);
-
-    for (int i = 0; i < nrows; i++) {
-        PyObject *row = PyTuple_New(ncols);
-
-        for (int j = 0; j < ncols; j++) {
-            PyObject *value = PyUnicode_FromString(PQgetvalue(result, i, j));
-            PyTuple_SET_ITEM(row, j, value);
-        }
-
-        PyList_SET_ITEM(list_results, i, row);
-    }
+    PyObject *py_results = format_result(self->cursor_type, self->result, 1);
 
     self->result = NULL;
-    return list_results;
+    
+    return py_results;
 }
 
 
@@ -192,24 +233,10 @@ PyObject *PGCursor_fetchone(PGCursor *self, PyObject *args) {
         return NULL;
     }
 
-    PGresult *result = self->result;
-
-    int nrows = PQntuples(result);
-    int ncols = PQnfields(result);
-
-    if (nrows == 0) {
-        Py_RETURN_NONE;
-    }
-
-    PyObject *row = PyTuple_New(ncols);
-
-    for (int j = 0; j < ncols; j++) {
-        PyObject *value = PyUnicode_FromString(PQgetvalue(result, 0, j));
-        PyTuple_SET_ITEM(row, j, value);
-    }
+    PyObject *py_results = format_result(self->cursor_type, self->result, 0);
 
     self->result = NULL;
-    return row;
+    return py_results;
 }
 
 PyObject *PGCursor_close(PGCursor *self) {
