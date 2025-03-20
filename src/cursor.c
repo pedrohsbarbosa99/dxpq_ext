@@ -62,8 +62,16 @@ static PyObject *get_dict(char* cursor_type, PGresult *result, int nrows, int nc
         PyObject *row = PyDict_New();
 
         for (int j = 0; j < ncols; j++) {
+            Oid  colum_type = PQftype(result, j);
             PyObject *name = PyUnicode_FromString(PQfname(result, j));
-            PyObject *value = PyUnicode_FromString(PQgetvalue(result, i, j));
+            PyObject *value;
+            const char *value_str = PQgetvalue(result, i, j);
+            if (colum_type == 16) {
+                value = PyBool_FromLong(strcmp(value_str, "t") == 0);
+            } else {
+                value = PyUnicode_FromString(value_str);
+            }
+            
             PyDict_SetItem(row, name, value);
         }
         if (many == 0){
