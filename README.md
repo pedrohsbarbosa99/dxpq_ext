@@ -36,7 +36,7 @@ Buildar a biblioteca `dxpq`:
 import dxpq_ext
 
 conn = dxpq_ext.PGConnection("conninfo")
-cursor = dxpq_ext.PGCursor(conn)
+cursor = dxpq_ext.PGCursor(conn, cursor_type="row") # options: ["row", "dict"]
 cursor.execute("SELECT * FROM table")
 
 for row in cursor.fetchall():
