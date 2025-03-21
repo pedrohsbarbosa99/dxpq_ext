@@ -36,21 +36,55 @@ int PGCursor_init(PGCursor *self, PyObject *args, PyObject *kwds) {
     return 0;
 }
 
+static PyObject *get_value(PGresult *result, int row, int col) {
+    Oid column_type = PQftype(result, col);
+    const char *value_str = PQgetvalue(result, row, col);
+
+    if (PQgetisnull(result, row, col)) {
+        Py_RETURN_NONE;
+    }
+
+    switch (column_type) {
+        case 16:  // BOOLEAN
+            return PyBool_FromLong(strcmp(value_str, "t") == 0);
+        case 20:  // BIGINT
+        case 21:  // SMALLINT
+        case 23:  // INTEGER
+            return PyLong_FromLong(strtol(value_str, NULL, 10));
+        case 700: // REAL (float4)
+        case 701: // DOUBLE PRECISION (float8)
+            return PyFloat_FromDouble(strtod(value_str, NULL));
+        case 1082: // DATE
+        case 1083: // TIME
+        case 1114: // TIMESTAMP WITHOUT TIME ZONE
+        case 1184: // TIMESTAMP WITH TIME ZONE
+        case 1266: // TIME WITH TIME ZONE
+            return PyUnicode_FromString(value_str);
+        case 25:  // TEXT
+        case 1043: // VARCHAR
+        case 2275: // CSTRING
+            return PyUnicode_FromString(value_str);
+        default:
+            return PyUnicode_FromString(value_str);
+    }
+}
+
+
 static PyObject *get_row(char* cursor_type, PGresult *result, int nrows, int ncols, int many) {
+    PyObject *row;
     PyObject *list_results = PyList_New(nrows);
 
     for (int i = 0; i < nrows; i++) {
-        PyObject *row = PyTuple_New(nrows);
-
+        row = PyTuple_New(ncols);
         for (int j = 0; j < ncols; j++) {
-            PyObject *value = PyUnicode_FromString(PQgetvalue(result, i, j));
-            PyTuple_SET_ITEM(row, j, value);
+            PyObject *value = get_value(result, i, j);
+            PyTuple_SetItem(row, j, value);            
         }
         if (many == 0){
             return row;
         }
-
         PyList_SET_ITEM(list_results, i, row);
+
     }
     return list_results;
 }
@@ -62,15 +96,8 @@ static PyObject *get_dict(char* cursor_type, PGresult *result, int nrows, int nc
         PyObject *row = PyDict_New();
 
         for (int j = 0; j < ncols; j++) {
-            Oid  colum_type = PQftype(result, j);
             PyObject *name = PyUnicode_FromString(PQfname(result, j));
-            PyObject *value;
-            const char *value_str = PQgetvalue(result, i, j);
-            if (colum_type == 16) {
-                value = PyBool_FromLong(strcmp(value_str, "t") == 0);
-            } else {
-                value = PyUnicode_FromString(value_str);
-            }
+            PyObject *value = get_value(result, i, j);
             
             PyDict_SetItem(row, name, value);
         }

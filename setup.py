@@ -19,7 +19,7 @@ extension = Extension(
 
 setup(
     name="dxpq_ext",
-    version="0.0.2",
+    version="0.0.3",
     ext_modules=[extension],
     description="Extension for PostgreSQL interaction",
     long_description=open("README.md").read(),
